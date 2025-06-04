@@ -2,22 +2,28 @@ package com.example.movie.service;
 
 import com.example.movie.model.Movie;
 import com.example.movie.repository.MovieRepository;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class MovieService {
 
     private final Logger logger = LoggerFactory.getLogger(MovieService.class);
     private final MovieRepository movieRepository;
+    private final Validator validator;
 
-    public MovieService(MovieRepository movieRepository) {
+    public MovieService(MovieRepository movieRepository, Validator validator) {
         this.movieRepository = movieRepository;
+        this.validator = validator;
     }
 
     public List<Movie> getAllMovies() {
@@ -45,19 +51,35 @@ public class MovieService {
         return movieRepository.findByGenreContainingIgnoreCase(genre);
     }
 
+    private void validateMovie(Movie movie) {
+        Set<ConstraintViolation<Movie>> violations = validator.validate(movie);
+        if (!violations.isEmpty()) {
+            StringBuilder sb = new StringBuilder("Movie Validation Fehler:");
+            for (ConstraintViolation<Movie> violation : violations) {
+                sb.append(" ").append(violation.getPropertyPath()).append(" ").append(violation.getMessage()).append(";");
+            }
+            throw new IllegalArgumentException(sb.toString());
+        }
+    }
+
     public Movie createMovie(Movie movie) {
         logger.info("Erstelle neuen Film: {}", movie.getTitle());
-        // Verbundene Reviews werden durch Cascade gespeichert
+        validateMovie(movie);
         return movieRepository.save(movie);
     }
 
     public List<Movie> createMovies(List<Movie> movies) {
         logger.info("Erstelle mehrere Filme: Anzahl={}", movies.size());
+        for (Movie movie : movies) {
+            validateMovie(movie);
+        }
         return movieRepository.saveAll(movies);
     }
 
     public Movie updateMovie(Long id, Movie updatedMovie) {
         logger.info("Aktualisiere Film mit ID: {}", id);
+        validateMovie(updatedMovie);
+
         return movieRepository.findById(id).map(movie -> {
             movie.setTitle(updatedMovie.getTitle());
             movie.setGenre(updatedMovie.getGenre());
@@ -66,7 +88,6 @@ public class MovieService {
             movie.setAverageRating(updatedMovie.getAverageRating());
             movie.setRecommended(updatedMovie.isRecommended());
 
-            // Reviews aktualisieren
             movie.getReviews().clear();
             if (updatedMovie.getReviews() != null) {
                 updatedMovie.getReviews().forEach(review -> review.setMovie(movie));
@@ -82,6 +103,7 @@ public class MovieService {
         movieRepository.deleteById(id);
     }
 
+    @Transactional
     public void deleteByReleaseDateBefore(LocalDate date) {
         logger.info("Lösche Filme vor Datum: {}", date);
         movieRepository.deleteByReleaseDateBefore(date);
