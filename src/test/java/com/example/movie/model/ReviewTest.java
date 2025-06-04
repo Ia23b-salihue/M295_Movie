@@ -4,46 +4,47 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 
 class ReviewTest {
 
     private Review review;
-    private Movie movie;
 
     @BeforeEach
     void setUp() {
         review = new Review();
-        movie = new Movie();
     }
 
     @Test
     void testIdGetterSetter() {
-        review.setId(5L);
-        assertEquals(5L, review.getId());
+        review.setId(100L);
+        assertEquals(100L, review.getId());
     }
 
     @Test
     void testUsernameGetterSetter() {
-        review.setUsername("john_doe");
-        assertEquals("john_doe", review.getUsername());
+        review.setUsername("MaxMustermann");
+        assertEquals("MaxMustermann", review.getUsername());
     }
 
     @Test
     void testCommentGetterSetter() {
-        review.setComment("Great movie!");
-        assertEquals("Great movie!", review.getComment());
+        String comment = "Sehr guter Film!";
+        review.setComment(comment);
+        assertEquals(comment, review.getComment());
     }
 
     @Test
     void testRatingGetterSetter() {
-        review.setRating(4);
-        assertEquals(4, review.getRating());
+        review.setRating(7);
+        assertEquals(7, review.getRating());
     }
 
     @Test
     void testMovieGetterSetter() {
+        Movie movie = new Movie();
+        movie.setId(1L);
         review.setMovie(movie);
-        assertSame(movie, review.getMovie());
+        assertEquals(movie, review.getMovie());
+        assertEquals(1L, review.getMovie().getId());
     }
 }
