@@ -4,6 +4,10 @@ import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import org.hibernate.validator.constraints.Length;
 
 @JsonIdentityInfo(
         generator = ObjectIdGenerators.PropertyGenerator.class,
@@ -15,10 +19,16 @@ public class Review {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank
+    @Length(max = 50, message = "Der Nutzername darf nicht länger als 50 Buchstaben sein.")
     private String username;
 
+    @NotBlank
+    @Length(max = 500, message = "Der Kommentar darf nicht länger als 50 Buchstaben sein.")
     private String comment;
 
+    @Min(value = 1, message = "Die Bewertung darf nicht tiefer als 1 sein.")
+    @Max(value = 10, message = "Die Bewertung darf höchstens 10 betragen.")
     private int rating;
 
     @ManyToOne

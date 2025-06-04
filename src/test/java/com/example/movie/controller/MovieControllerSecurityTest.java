@@ -2,249 +2,462 @@ package com.example.movie.controller;
 
 import com.example.movie.model.Movie;
 import com.example.movie.service.MovieService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(controllers = MovieController.class)
-@Import({com.example.movie.security.SecurityConfig.class})
+@WebMvcTest(MovieController.class)
+@Import(com.example.movie.security.SecurityConfig.class)
 class MovieControllerSecurityTest {
 
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @org.springframework.boot.test.mock.mockito.MockBean
     private MovieService movieService;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    private Movie sampleMovie;
-
-    @BeforeEach
-    void setUp() {
-        objectMapper.registerModule(new JavaTimeModule());
-
-        sampleMovie = new Movie();
-        sampleMovie.setId(1L);
-        sampleMovie.setTitle("Test Movie");
-        sampleMovie.setGenre("Drama");
-        sampleMovie.setReleaseDate(LocalDate.of(2023, 5, 1));
-        sampleMovie.setAgeRating(12);
-        sampleMovie.setAverageRating(4.2);
-        sampleMovie.setRecommended(true);
-        sampleMovie.setReviews(List.of());
+    private String toJson(Movie m) {
+        return String.format(
+                "{\"id\":%d,\"title\":\"%s\",\"genre\":\"%s\",\"releaseDate\":\"%s\",\"ageRating\":%d,\"averageRating\":%.1f,\"recommended\":%s}",
+                m.getId(),
+                m.getTitle(),
+                m.getGenre(),
+                m.getReleaseDate().toString(),
+                m.getAgeRating(),
+                m.getAverageRating(),
+                m.isRecommended()
+        );
     }
 
-    @Test
-    void whenGetAllWithoutAuth_thenUnauthorized() throws Exception {
-        mockMvc.perform(get("/api/movies"))
-                .andExpect(status().isUnauthorized());
+    private Movie createSampleMovie(Long id) {
+        Movie m = new Movie();
+        m.setId(id);
+        m.setTitle("Inception");
+        m.setGenre("Sci-Fi");
+        m.setReleaseDate(LocalDate.of(2010, 7, 16));
+        m.setAgeRating(13);
+        m.setAverageRating(8.8);
+        m.setRecommended(true);
+        return m;
     }
 
-    @Test
-    void whenGetByIdWithoutAuth_thenUnauthorized() throws Exception {
-        mockMvc.perform(get("/api/movies/1"))
-                .andExpect(status().isUnauthorized());
+    @Nested
+    @DisplayName("GET‐Endpunkte: Zugriff für USER und ADMIN erlaubt, für anonym verboten")
+    class GetEndpoints {
+
+        @Test
+        @DisplayName("GET /api/movies ‒ als USER erhält 200 + Liste")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void getAll_AsUser_ShouldReturn200() throws Exception {
+            List<Movie> list = Arrays.asList(createSampleMovie(1L), createSampleMovie(2L));
+            when(movieService.getAllMovies()).thenReturn(list);
+
+            mockMvc.perform(get("/api/movies"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$", hasSize(2)))
+                    .andExpect(jsonPath("$[0].id", is(1)))
+                    .andExpect(jsonPath("$[1].title", is("Inception")));
+
+            verify(movieService, times(1)).getAllMovies();
+        }
+
+        @Test
+        @DisplayName("GET /api/movies ‒ ohne Authentifizierung → 401 Unauthorized")
+        void getAll_Anonymous_ShouldReturn401() throws Exception {
+            mockMvc.perform(get("/api/movies"))
+                    .andExpect(status().isUnauthorized());
+            verify(movieService, never()).getAllMovies();
+        }
+
+        @Test
+        @DisplayName("GET /api/movies/{id} ‒ als USER + existent → 200 + Movie")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void getById_Exists_AsUser_ShouldReturn200() throws Exception {
+            Movie m = createSampleMovie(1L);
+            when(movieService.getMovieById(1L)).thenReturn(Optional.of(m));
+
+            mockMvc.perform(get("/api/movies/1"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.id", is(1)))
+                    .andExpect(jsonPath("$.title", is("Inception")));
+
+            verify(movieService, times(1)).getMovieById(1L);
+        }
+
+        @Test
+        @DisplayName("GET /api/movies/{id} ‒ als USER + nicht existent → 404 Not Found")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void getById_NotFound_AsUser_ShouldReturn404() throws Exception {
+            when(movieService.getMovieById(42L)).thenReturn(Optional.empty());
+
+            mockMvc.perform(get("/api/movies/42"))
+                    .andExpect(status().isNotFound());
+
+            verify(movieService, times(1)).getMovieById(42L);
+        }
+
+        @Test
+        @DisplayName("GET /api/movies/{id} ‒ ohne Authentifizierung → 401")
+        void getById_Anonymous_ShouldReturn401() throws Exception {
+            mockMvc.perform(get("/api/movies/1"))
+                    .andExpect(status().isUnauthorized());
+            verify(movieService, never()).getMovieById(anyLong());
+        }
+
+        @Test
+        @DisplayName("GET /api/movies/exists/{id} ‒ als USER → 200 + boolean")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void existsById_AsUser_ShouldReturn200() throws Exception {
+            when(movieService.existsById(5L)).thenReturn(true);
+
+            mockMvc.perform(get("/api/movies/exists/5"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string("true"));
+
+            verify(movieService, times(1)).existsById(5L);
+        }
+
+        @Test
+        @DisplayName("GET /api/movies/filter/recommended?recommended=true ‒ als USER → 200 + Liste")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void filterRecommended_AsUser_ShouldReturn200() throws Exception {
+            List<Movie> recommended = Arrays.asList(createSampleMovie(1L));
+            when(movieService.getMoviesByRecommended(true)).thenReturn(recommended);
+
+            mockMvc.perform(get("/api/movies/filter/recommended")
+                            .param("recommended", "true"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(1)))
+                    .andExpect(jsonPath("$[0].recommended", is(true)));
+
+            verify(movieService, times(1)).getMoviesByRecommended(true);
+        }
+
+        @Test
+        @DisplayName("GET /api/movies/filter/genre?genre=Sci-Fi ‒ als USER → 200 + Liste")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void filterGenre_AsUser_ShouldReturn200() throws Exception {
+            List<Movie> sciFi = Arrays.asList(createSampleMovie(1L));
+            when(movieService.getMoviesByGenre("Sci-Fi")).thenReturn(sciFi);
+
+            mockMvc.perform(get("/api/movies/filter/genre")
+                            .param("genre", "Sci-Fi"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].genre", is("Sci-Fi")));
+
+            verify(movieService, times(1)).getMoviesByGenre("Sci-Fi");
+        }
+
+        @Test
+        @DisplayName("GET‐Filter‐Endpunkte ‒ ohne Authentifizierung → 401")
+        void filters_Anonymous_ShouldReturn401() throws Exception {
+            mockMvc.perform(get("/api/movies/filter/genre").param("genre", "X"))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(get("/api/movies/filter/recommended").param("recommended", "false"))
+                    .andExpect(status().isUnauthorized());
+            verify(movieService, never()).getMoviesByGenre(anyString());
+            verify(movieService, never()).getMoviesByRecommended(anyBoolean());
+        }
     }
 
-    @Test
-    void whenPostWithoutAuth_thenUnauthorized() throws Exception {
-        String body = objectMapper.writeValueAsString(sampleMovie);
-        mockMvc.perform(
-                        post("/api/movies")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(body)
-                )
-                .andExpect(status().isUnauthorized());
+    @Nested
+    @DisplayName("POST‐Endpunkte: nur ADMIN, USER=403, anonym=401")
+    class PostEndpoints {
+
+        @Test
+        @DisplayName("POST /api/movies ‒ als ADMIN → 200 + erstellter Film")
+        @WithMockUser(username = "admin", roles = {"ADMIN"})
+        void create_AsAdmin_ShouldReturn200() throws Exception {
+            Movie m = createSampleMovie(7L);
+            String payload = toJson(m);
+            when(movieService.createMovie(any(Movie.class))).thenReturn(m);
+
+            mockMvc.perform(post("/api/movies")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id", is(7)))
+                    .andExpect(jsonPath("$.title", is("Inception")));
+
+            verify(movieService, times(1)).createMovie(any(Movie.class));
+        }
+
+        @Test
+        @DisplayName("POST /api/movies ‒ als USER → 403 Forbidden")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void create_AsUser_ShouldReturn403() throws Exception {
+            Movie m = createSampleMovie(7L);
+            String payload = toJson(m);
+
+            mockMvc.perform(post("/api/movies")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isForbidden());
+
+            verify(movieService, never()).createMovie(any(Movie.class));
+        }
+
+        @Test
+        @DisplayName("POST /api/movies ‒ anonym → 401 Unauthorized")
+        void create_Anonymous_ShouldReturn401() throws Exception {
+            Movie m = createSampleMovie(7L);
+            String payload = toJson(m);
+
+            mockMvc.perform(post("/api/movies")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isUnauthorized());
+
+            verify(movieService, never()).createMovie(any(Movie.class));
+        }
+
+        @Test
+        @DisplayName("POST /api/movies/batch ‒ als ADMIN → 200 + Liste")
+        @WithMockUser(username = "admin", roles = {"ADMIN"})
+        void createBatch_AsAdmin_ShouldReturn200() throws Exception {
+            Movie m1 = createSampleMovie(1L);
+            Movie m2 = createSampleMovie(2L);
+            List<Movie> list = Arrays.asList(m1, m2);
+            String payload = "[" + toJson(m1) + "," + toJson(m2) + "]";
+            when(movieService.createMovies(anyList())).thenReturn(list);
+
+            mockMvc.perform(post("/api/movies/batch")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(2)))
+                    .andExpect(jsonPath("$[1].id", is(2)));
+
+            verify(movieService, times(1)).createMovies(anyList());
+        }
+
+        @Test
+        @DisplayName("POST /api/movies/batch ‒ als USER → 403 Forbidden")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void createBatch_AsUser_ShouldReturn403() throws Exception {
+            Movie m1 = createSampleMovie(1L);
+            String payload = "[" + toJson(m1) + "]";
+            mockMvc.perform(post("/api/movies/batch")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isForbidden());
+            verify(movieService, never()).createMovies(anyList());
+        }
+
+        @Test
+        @DisplayName("POST /api/movies/batch ‒ anonym → 401")
+        void createBatch_Anonymous_ShouldReturn401() throws Exception {
+            Movie m1 = createSampleMovie(1L);
+            String payload = "[" + toJson(m1) + "]";
+            mockMvc.perform(post("/api/movies/batch")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isUnauthorized());
+            verify(movieService, never()).createMovies(anyList());
+        }
     }
 
-    @Test
-    void whenDeleteWithoutAuth_thenUnauthorized() throws Exception {
-        mockMvc.perform(delete("/api/movies/1"))
-                .andExpect(status().isUnauthorized());
+    @Nested
+    @DisplayName("PUT‐Endpunkt: nur ADMIN, USER=403, anonym=401")
+    class PutEndpoint {
+
+        @Test
+        @DisplayName("PUT /api/movies/{id} ‒ als ADMIN + existent → 200 + aktualisierter Film")
+        @WithMockUser(username = "admin", roles = {"ADMIN"})
+        void update_AsAdmin_Exists_ShouldReturn200() throws Exception {
+            Movie m = createSampleMovie(3L);
+            String payload = toJson(m);
+            when(movieService.updateMovie(eq(3L), any(Movie.class))).thenReturn(m);
+
+            mockMvc.perform(put("/api/movies/3")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id", is(3)));
+
+            verify(movieService, times(1)).updateMovie(eq(3L), any(Movie.class));
+        }
+
+        @Test
+        @DisplayName("PUT /api/movies/{id} ‒ als ADMIN + nicht existent → 404 Not Found")
+        @WithMockUser(username = "admin", roles = {"ADMIN"})
+        void update_AsAdmin_NotFound_ShouldReturn404() throws Exception {
+            Movie m = createSampleMovie(99L);
+            String payload = toJson(m);
+            when(movieService.updateMovie(eq(99L), any(Movie.class)))
+                    .thenThrow(new RuntimeException("nicht gefunden"));
+
+            mockMvc.perform(put("/api/movies/99")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isNotFound());
+
+            verify(movieService, times(1)).updateMovie(eq(99L), any(Movie.class));
+        }
+
+        @Test
+        @DisplayName("PUT /api/movies/{id} ‒ als USER → 403 Forbidden")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void update_AsUser_ShouldReturn403() throws Exception {
+            Movie m = createSampleMovie(3L);
+            String payload = toJson(m);
+
+            mockMvc.perform(put("/api/movies/3")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isForbidden());
+
+            verify(movieService, never()).updateMovie(anyLong(), any(Movie.class));
+        }
+
+        @Test
+        @DisplayName("PUT /api/movies/{id} ‒ anonym → 401")
+        void update_Anonymous_ShouldReturn401() throws Exception {
+            Movie m = createSampleMovie(3L);
+            String payload = toJson(m);
+
+            mockMvc.perform(put("/api/movies/3")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isUnauthorized());
+
+            verify(movieService, never()).updateMovie(anyLong(), any(Movie.class));
+        }
     }
 
-    @Test
-    @WithMockUser(username = "user", roles = {"USER"})
-    void whenUserGetsAll_thenOk() throws Exception {
-        when(movieService.getAllMovies()).thenReturn(List.of(sampleMovie));
+    @Nested
+    @DisplayName("DELETE‐Endpoints: nur ADMIN, USER=403, anonym=401")
+    class DeleteEndpoints {
 
-        mockMvc.perform(get("/api/movies"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$[0].id").value(1L));
+        @Test
+        @DisplayName("DELETE /api/movies/{id} ‒ als ADMIN + existent → 204 No Content")
+        @WithMockUser(username = "admin", roles = {"ADMIN"})
+        void deleteById_AsAdmin_Exists_ShouldReturn204() throws Exception {
+            when(movieService.existsById(10L)).thenReturn(true);
+            doNothing().when(movieService).deleteById(10L);
 
-        verify(movieService, times(1)).getAllMovies();
-    }
+            mockMvc.perform(delete("/api/movies/10"))
+                    .andExpect(status().isNoContent());
 
-    @Test
-    @WithMockUser(username = "user", roles = {"USER"})
-    void whenUserGetsById_thenOk() throws Exception {
-        when(movieService.getMovieById(1L)).thenReturn(Optional.of(sampleMovie));
+            verify(movieService, times(1)).existsById(10L);
+            verify(movieService, times(1)).deleteById(10L);
+        }
 
-        mockMvc.perform(get("/api/movies/1"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.title").value("Test Movie"));
+        @Test
+        @DisplayName("DELETE /api/movies/{id} ‒ als ADMIN + nicht existent → 404 Not Found")
+        @WithMockUser(username = "admin", roles = {"ADMIN"})
+        void deleteById_AsAdmin_NotFound_ShouldReturn404() throws Exception {
+            when(movieService.existsById(99L)).thenReturn(false);
 
-        verify(movieService, times(1)).getMovieById(1L);
-    }
+            mockMvc.perform(delete("/api/movies/99"))
+                    .andExpect(status().isNotFound());
 
-    @Test
-    @WithMockUser(username = "user", roles = {"USER"})
-    void whenUserPostsNewMovie_thenOk() throws Exception {
-        when(movieService.createMovie(any(Movie.class))).thenReturn(sampleMovie);
+            verify(movieService, times(1)).existsById(99L);
+            verify(movieService, never()).deleteById(anyLong());
+        }
 
-        String body = objectMapper.writeValueAsString(sampleMovie);
-        mockMvc.perform(
-                        post("/api/movies")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(body)
-                )
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1L))
-                .andExpect(jsonPath("$.title").value("Test Movie"));
+        @Test
+        @DisplayName("DELETE /api/movies/{id} ‒ als USER → 403 Forbidden")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void deleteById_AsUser_ShouldReturn403() throws Exception {
+            mockMvc.perform(delete("/api/movies/5"))
+                    .andExpect(status().isForbidden());
+            verify(movieService, never()).existsById(anyLong());
+            verify(movieService, never()).deleteById(anyLong());
+        }
 
-        verify(movieService, times(1)).createMovie(any(Movie.class));
-    }
+        @Test
+        @DisplayName("DELETE /api/movies/{id} ‒ anonym → 401")
+        void deleteById_Anonymous_ShouldReturn401() throws Exception {
+            mockMvc.perform(delete("/api/movies/5"))
+                    .andExpect(status().isUnauthorized());
+            verify(movieService, never()).existsById(anyLong());
+            verify(movieService, never()).deleteById(anyLong());
+        }
 
-    @Test
-    @WithMockUser(username = "user", roles = {"USER"})
-    void whenUserUpdatesMovie_thenOk() throws Exception {
-        Movie updated = new Movie();
-        updated.setId(1L);
-        updated.setTitle("Updated Title");
-        updated.setGenre("Comedy");
-        updated.setReleaseDate(LocalDate.of(2022, 8, 15));
-        updated.setAgeRating(16);
-        updated.setAverageRating(3.7);
-        updated.setRecommended(false);
-        updated.setReviews(List.of());
+        @Test
+        @DisplayName("DELETE /api/movies/filter/releaseDate?date=2020-01-01 ‒ als ADMIN → 204 No Content")
+        @WithMockUser(username = "admin", roles = {"ADMIN"})
+        void deleteByReleaseDate_AsAdmin_ShouldReturn204() throws Exception {
+            doNothing().when(movieService).deleteByReleaseDateBefore(LocalDate.of(2020, 1, 1));
 
-        when(movieService.updateMovie(eq(1L), any(Movie.class))).thenReturn(updated);
+            mockMvc.perform(delete("/api/movies/filter/releaseDate")
+                            .param("date", "2020-01-01"))
+                    .andExpect(status().isNoContent());
 
-        String body = objectMapper.writeValueAsString(updated);
-        mockMvc.perform(
-                        put("/api/movies/1")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(body)
-                )
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("Updated Title"))
-                .andExpect(jsonPath("$.genre").value("Comedy"));
+            verify(movieService, times(1)).deleteByReleaseDateBefore(LocalDate.of(2020, 1, 1));
+        }
 
-        verify(movieService, times(1)).updateMovie(eq(1L), any(Movie.class));
-    }
+        @Test
+        @DisplayName("DELETE /api/movies/filter/releaseDate?date=2020-01-01 ‒ als USER → 403 Forbidden")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void deleteByReleaseDate_AsUser_ShouldReturn403() throws Exception {
+            mockMvc.perform(delete("/api/movies/filter/releaseDate")
+                            .param("date", "2020-01-01"))
+                    .andExpect(status().isForbidden());
 
-    @Test
-    @WithMockUser(username = "user", roles = {"USER"})
-    void whenUserDeletesExistingMovie_thenNoContent() throws Exception {
-        // Stub existsById(true) → deleteById → 204
-        when(movieService.existsById(1L)).thenReturn(true);
-        doNothing().when(movieService).deleteById(1L);
+            verify(movieService, never()).deleteByReleaseDateBefore(any());
+        }
 
-        mockMvc.perform(delete("/api/movies/1"))
-                .andExpect(status().isNoContent());
+        @Test
+        @DisplayName("DELETE /api/movies/filter/releaseDate?date=2020-01-01 ‒ anonym → 401")
+        void deleteByReleaseDate_Anonymous_ShouldReturn401() throws Exception {
+            mockMvc.perform(delete("/api/movies/filter/releaseDate")
+                            .param("date", "2020-01-01"))
+                    .andExpect(status().isUnauthorized());
 
-        verify(movieService, times(1)).existsById(1L);
-        verify(movieService, times(1)).deleteById(1L);
-    }
+            verify(movieService, never()).deleteByReleaseDateBefore(any());
+        }
 
-    @Test
-    @WithMockUser(username = "user", roles = {"USER"})
-    void whenUserDeletesNonExistingMovie_thenNotFound() throws Exception {
-        when(movieService.existsById(1L)).thenReturn(false);
+        @Test
+        @DisplayName("DELETE /api/movies ‒ als ADMIN → 204 No Content")
+        @WithMockUser(username = "admin", roles = {"ADMIN"})
+        void deleteAll_AsAdmin_ShouldReturn204() throws Exception {
+            doNothing().when(movieService).deleteAll();
 
-        mockMvc.perform(delete("/api/movies/1"))
-                .andExpect(status().isNotFound());
+            mockMvc.perform(delete("/api/movies"))
+                    .andExpect(status().isNoContent());
 
-        verify(movieService, times(1)).existsById(1L);
-        verify(movieService, never()).deleteById(anyLong());
-    }
+            verify(movieService, times(1)).deleteAll();
+        }
 
-    @Test
-    @WithMockUser(username = "user", roles = {"USER"})
-    void whenUserDeletesByReleaseDate_thenNoContent() throws Exception {
-        // DELETE /api/movies/filter/releaseDate?date=2021-01-01
-        doNothing().when(movieService).deleteByReleaseDateBefore(LocalDate.of(2021, 1, 1));
+        @Test
+        @DisplayName("DELETE /api/movies ‒ als USER → 403 Forbidden")
+        @WithMockUser(username = "user", roles = {"USER"})
+        void deleteAll_AsUser_ShouldReturn403() throws Exception {
+            mockMvc.perform(delete("/api/movies"))
+                    .andExpect(status().isForbidden());
 
-        mockMvc.perform(
-                        delete("/api/movies/filter/releaseDate")
-                                .param("date", "2021-01-01")
-                )
-                .andExpect(status().isNoContent());
+            verify(movieService, never()).deleteAll();
+        }
 
-        verify(movieService, times(1)).deleteByReleaseDateBefore(LocalDate.of(2021, 1, 1));
-    }
+        @Test
+        @DisplayName("DELETE /api/movies ‒ anonym → 401")
+        void deleteAll_Anonymous_ShouldReturn401() throws Exception {
+            mockMvc.perform(delete("/api/movies"))
+                    .andExpect(status().isUnauthorized());
 
-    @Test
-    @WithMockUser(username = "user", roles = {"USER"})
-    void whenUserDeletesAll_thenNoContent() throws Exception {
-        doNothing().when(movieService).deleteAll();
-
-        mockMvc.perform(delete("/api/movies"))
-                .andExpect(status().isNoContent());
-
-        verify(movieService, times(1)).deleteAll();
-    }
-
-    @Test
-    @WithMockUser(username = "admin", roles = {"ADMIN"})
-    void whenAdminGetsAll_thenOk() throws Exception {
-        when(movieService.getAllMovies()).thenReturn(List.of(sampleMovie));
-
-        mockMvc.perform(get("/api/movies"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(1L));
-
-        verify(movieService, times(1)).getAllMovies();
-    }
-
-    @Test
-    @WithMockUser(username = "admin", roles = {"ADMIN"})
-    void whenAdminPostsNewMovie_thenOk() throws Exception {
-        when(movieService.createMovie(any(Movie.class))).thenReturn(sampleMovie);
-
-        String body = objectMapper.writeValueAsString(sampleMovie);
-        mockMvc.perform(
-                        post("/api/movies")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(body)
-                )
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("Test Movie"));
-
-        verify(movieService, times(1)).createMovie(any(Movie.class));
-    }
-
-    @Test
-    @WithMockUser(username = "admin", roles = {"ADMIN"})
-    void whenAdminDeletesByReleaseDate_thenNoContent() throws Exception {
-        doNothing().when(movieService).deleteByReleaseDateBefore(LocalDate.of(2020, 12, 31));
-
-        mockMvc.perform(
-                        delete("/api/movies/filter/releaseDate")
-                                .param("date", "2020-12-31")
-                )
-                .andExpect(status().isNoContent());
-
-        verify(movieService, times(1)).deleteByReleaseDateBefore(LocalDate.of(2020, 12, 31));
+            verify(movieService, never()).deleteAll();
+        }
     }
 }

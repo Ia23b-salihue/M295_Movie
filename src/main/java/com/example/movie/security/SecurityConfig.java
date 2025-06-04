@@ -36,17 +36,31 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
-
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/movies/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/movies/**").hasAnyRole("ADMIN", "USER")
+                        .requestMatchers(
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml",
+                                "/swagger-resources/**",
+                                "/webjars/**"
+                        ).permitAll()
+
+                        .requestMatchers(HttpMethod.GET, "/api/movies/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/movies/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/movies/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/movies/**").hasRole("ADMIN")
+
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/reviews/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/reviews/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/reviews/**").hasRole("ADMIN")
+
+                        .requestMatchers("/api/movies/**").authenticated()
+
                         .anyRequest().authenticated()
                 )
-
                 .httpBasic(Customizer.withDefaults());
 
         return http.build();
     }
 }
-
-
