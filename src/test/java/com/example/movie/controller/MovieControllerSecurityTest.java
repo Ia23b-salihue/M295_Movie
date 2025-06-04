@@ -6,14 +6,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -22,7 +21,6 @@ import java.util.Optional;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(controllers = MovieController.class)
@@ -41,7 +39,6 @@ class MovieControllerSecurityTest {
 
     @BeforeEach
     void setUp() {
-        // Register JavaTimeModule so that LocalDate can be serialized
         objectMapper.registerModule(new JavaTimeModule());
 
         sampleMovie = new Movie();
@@ -54,10 +51,6 @@ class MovieControllerSecurityTest {
         sampleMovie.setRecommended(true);
         sampleMovie.setReviews(List.of());
     }
-
-    //--------------------------------------------------------------------------------
-    // 1. Unauthenticated requests → 401 Unauthorized
-    //--------------------------------------------------------------------------------
 
     @Test
     void whenGetAllWithoutAuth_thenUnauthorized() throws Exception {
@@ -88,28 +81,21 @@ class MovieControllerSecurityTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    //--------------------------------------------------------------------------------
-    // 2. Authenticated as USER → no role‐restriction actually applies (because the antMatcher
-    //    in SecurityConfig is "/movies/**", not "/api/movies/**"). Once you are authenticated,
-    //    you can hit GET/POST/PUT/DELETE under "/api/movies/**".
-    //--------------------------------------------------------------------------------
-
     @Test
-    @WithMockUser(username = "user", roles = { "USER" })
+    @WithMockUser(username = "user", roles = {"USER"})
     void whenUserGetsAll_thenOk() throws Exception {
         when(movieService.getAllMovies()).thenReturn(List.of(sampleMovie));
 
         mockMvc.perform(get("/api/movies"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                // Validate JSON array with one element having "id":1
                 .andExpect(jsonPath("$[0].id").value(1L));
 
         verify(movieService, times(1)).getAllMovies();
     }
 
     @Test
-    @WithMockUser(username = "user", roles = { "USER" })
+    @WithMockUser(username = "user", roles = {"USER"})
     void whenUserGetsById_thenOk() throws Exception {
         when(movieService.getMovieById(1L)).thenReturn(Optional.of(sampleMovie));
 
@@ -122,7 +108,7 @@ class MovieControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "user", roles = { "USER" })
+    @WithMockUser(username = "user", roles = {"USER"})
     void whenUserPostsNewMovie_thenOk() throws Exception {
         when(movieService.createMovie(any(Movie.class))).thenReturn(sampleMovie);
 
@@ -140,7 +126,7 @@ class MovieControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "user", roles = { "USER" })
+    @WithMockUser(username = "user", roles = {"USER"})
     void whenUserUpdatesMovie_thenOk() throws Exception {
         Movie updated = new Movie();
         updated.setId(1L);
@@ -168,7 +154,7 @@ class MovieControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "user", roles = { "USER" })
+    @WithMockUser(username = "user", roles = {"USER"})
     void whenUserDeletesExistingMovie_thenNoContent() throws Exception {
         // Stub existsById(true) → deleteById → 204
         when(movieService.existsById(1L)).thenReturn(true);
@@ -182,7 +168,7 @@ class MovieControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "user", roles = { "USER" })
+    @WithMockUser(username = "user", roles = {"USER"})
     void whenUserDeletesNonExistingMovie_thenNotFound() throws Exception {
         when(movieService.existsById(1L)).thenReturn(false);
 
@@ -194,7 +180,7 @@ class MovieControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "user", roles = { "USER" })
+    @WithMockUser(username = "user", roles = {"USER"})
     void whenUserDeletesByReleaseDate_thenNoContent() throws Exception {
         // DELETE /api/movies/filter/releaseDate?date=2021-01-01
         doNothing().when(movieService).deleteByReleaseDateBefore(LocalDate.of(2021, 1, 1));
@@ -209,7 +195,7 @@ class MovieControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "user", roles = { "USER" })
+    @WithMockUser(username = "user", roles = {"USER"})
     void whenUserDeletesAll_thenNoContent() throws Exception {
         doNothing().when(movieService).deleteAll();
 
@@ -219,14 +205,8 @@ class MovieControllerSecurityTest {
         verify(movieService, times(1)).deleteAll();
     }
 
-    //--------------------------------------------------------------------------------
-    // 3. Authenticated as ADMIN → exactly the same behavior in this configuration,
-    //    because "/movies/**" does not match "/api/movies/**". We only verify
-    //    that ADMIN can also successfully GET/POST/DELETE/etc.
-    //--------------------------------------------------------------------------------
-
     @Test
-    @WithMockUser(username = "admin", roles = { "ADMIN" })
+    @WithMockUser(username = "admin", roles = {"ADMIN"})
     void whenAdminGetsAll_thenOk() throws Exception {
         when(movieService.getAllMovies()).thenReturn(List.of(sampleMovie));
 
@@ -238,7 +218,7 @@ class MovieControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "admin", roles = { "ADMIN" })
+    @WithMockUser(username = "admin", roles = {"ADMIN"})
     void whenAdminPostsNewMovie_thenOk() throws Exception {
         when(movieService.createMovie(any(Movie.class))).thenReturn(sampleMovie);
 
@@ -255,7 +235,7 @@ class MovieControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(username = "admin", roles = { "ADMIN" })
+    @WithMockUser(username = "admin", roles = {"ADMIN"})
     void whenAdminDeletesByReleaseDate_thenNoContent() throws Exception {
         doNothing().when(movieService).deleteByReleaseDateBefore(LocalDate.of(2020, 12, 31));
 

@@ -22,14 +22,11 @@ import java.util.Optional;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(controllers = MovieController.class)
-@AutoConfigureMockMvc(addFilters = false) // disable security filters for controller-only tests
+@AutoConfigureMockMvc(addFilters = false)
 class MovieControllerTest {
 
     @Autowired
@@ -44,7 +41,7 @@ class MovieControllerTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule()); // for LocalDate serialization
+        objectMapper.registerModule(new JavaTimeModule());
 
         sampleMovie = new Movie();
         sampleMovie.setId(1L);
@@ -57,7 +54,6 @@ class MovieControllerTest {
         sampleMovie.setReviews(Collections.emptyList());
     }
 
-    // 1. GET /api/movies → returns list of all movies
     @Test
     void whenGetAllMovies_thenReturnsMovieList() throws Exception {
         when(movieService.getAllMovies()).thenReturn(List.of(sampleMovie));
@@ -71,7 +67,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).getAllMovies();
     }
 
-    // 2. GET /api/movies/{id} → found
     @Test
     void whenGetMovieByIdFound_thenReturnsMovie() throws Exception {
         when(movieService.getMovieById(1L)).thenReturn(Optional.of(sampleMovie));
@@ -85,7 +80,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).getMovieById(1L);
     }
 
-    // 3. GET /api/movies/{id} → not found
     @Test
     void whenGetMovieByIdNotFound_thenReturns404() throws Exception {
         when(movieService.getMovieById(1L)).thenReturn(Optional.empty());
@@ -96,7 +90,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).getMovieById(1L);
     }
 
-    // 4. GET /api/movies/exists/{id} → returns boolean
     @Test
     void whenExistsById_thenReturnsTrue() throws Exception {
         when(movieService.existsById(1L)).thenReturn(true);
@@ -109,7 +102,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).existsById(1L);
     }
 
-    // 5. GET /api/movies/filter/recommended?recommended=true → returns filtered list
     @Test
     void whenGetByRecommended_thenReturnsFilteredList() throws Exception {
         when(movieService.getMoviesByRecommended(true)).thenReturn(List.of(sampleMovie));
@@ -123,7 +115,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).getMoviesByRecommended(true);
     }
 
-    // 6. GET /api/movies/filter/genre?genre=Drama → returns filtered list
     @Test
     void whenGetByGenre_thenReturnsFilteredList() throws Exception {
         when(movieService.getMoviesByGenre("Drama")).thenReturn(List.of(sampleMovie));
@@ -137,7 +128,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).getMoviesByGenre("Drama");
     }
 
-    // 7. POST /api/movies → create new movie
     @Test
     void whenCreateMovie_thenReturnsCreatedMovie() throws Exception {
         when(movieService.createMovie(any(Movie.class))).thenReturn(sampleMovie);
@@ -154,7 +144,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).createMovie(any(Movie.class));
     }
 
-    // 8. POST /api/movies/batch → create multiple movies
     @Test
     void whenCreateBatch_thenReturnsCreatedMovies() throws Exception {
         Movie second = new Movie();
@@ -182,7 +171,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).createMovies(anyList());
     }
 
-    // 9. PUT /api/movies/{id} → update existing movie
     @Test
     void whenUpdateMovieFound_thenReturnsUpdated() throws Exception {
         Movie updated = new Movie();
@@ -209,7 +197,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).updateMovie(eq(1L), any(Movie.class));
     }
 
-    // 10. PUT /api/movies/{id} → update non-existent movie
     @Test
     void whenUpdateMovieNotFound_thenReturns404() throws Exception {
         when(movieService.updateMovie(eq(1L), any(Movie.class)))
@@ -224,7 +211,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).updateMovie(eq(1L), any(Movie.class));
     }
 
-    // 11. DELETE /api/movies/{id} → delete existing
     @Test
     void whenDeleteByIdFound_thenNoContent() throws Exception {
         when(movieService.existsById(1L)).thenReturn(true);
@@ -237,7 +223,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).deleteById(1L);
     }
 
-    // 12. DELETE /api/movies/{id} → delete non-existent
     @Test
     void whenDeleteByIdNotFound_thenReturns404() throws Exception {
         when(movieService.existsById(1L)).thenReturn(false);
@@ -249,7 +234,6 @@ class MovieControllerTest {
         Mockito.verify(movieService, Mockito.never()).deleteById(anyLong());
     }
 
-    // 13. DELETE /api/movies/filter/releaseDate?date=YYYY-MM-DD → delete by release date
     @Test
     void whenDeleteByReleaseDate_thenNoContent() throws Exception {
         LocalDate cutoff = LocalDate.of(2021, 1, 1);
@@ -262,7 +246,6 @@ class MovieControllerTest {
         Mockito.verify(movieService).deleteByReleaseDateBefore(cutoff);
     }
 
-    // 14. DELETE /api/movies → delete all
     @Test
     void whenDeleteAll_thenNoContent() throws Exception {
         doNothing().when(movieService).deleteAll();
