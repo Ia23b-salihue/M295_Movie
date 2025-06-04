@@ -10,12 +10,9 @@ import java.util.List;
 @Repository
 public interface MovieRepository extends JpaRepository<Movie, Long> {
 
-    // Filter nach recommended (boolean)
     List<Movie> findByRecommended(boolean recommended);
 
-    // Filter nach Genre (Text)
     List<Movie> findByGenreContainingIgnoreCase(String genre);
 
-    // Löschen nach Datum
     void deleteByReleaseDateBefore(LocalDate date);
 }

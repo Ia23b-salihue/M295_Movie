@@ -14,15 +14,20 @@ public class Review {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     private String username;
+
     private String comment;
+
     private int rating;
 
     @ManyToOne
     @JoinColumn(name = "movie_id")
     @JsonBackReference
     private Movie movie;
-    public Review() {}
+
+    public Review() {
+    }
 
     public Long getId() {
         return id;
